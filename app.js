@@ -966,55 +966,127 @@ class App {
         });
     }
 
-    backupData() {
-        const data = {
-            settings: this.store.getSettings(),
-            products: this.store.getProducts(),
-            staff: this.store.getStaff(),
-            sales: this.store.get(this.store.keys.SALES),
-            expenses: this.store.get(this.store.keys.EXPENSES),
-            purchases: this.store.get(this.store.keys.PURCHASES),
-            lastBill: localStorage.getItem(this.store.keys.LAST_BILL)
-        };
-
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `bun_butter_backup_${getTimestamp()}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-    }
+    // backupDataJSON() { ... } // Legacy JSON backup removed in favor of Excel
 
     restoreData(event) {
         const file = event.target.files[0];
         if (!file) return;
 
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const data = JSON.parse(e.target.result);
-                if (data.settings && data.products) {
-                    if (!confirm('This will overwrite current data. Continue?')) return;
+        const extension = file.name.split('.').pop().toLowerCase();
 
-                    this.store.saveSettings(data.settings);
-                    this.store.set(this.store.keys.PRODUCTS, data.products);
-                    this.store.set(this.store.keys.STAFF, data.staff || []);
-                    this.store.set(this.store.keys.SALES, data.sales || []);
-                    this.store.set(this.store.keys.EXPENSES, data.expenses || []);
-                    this.store.set(this.store.keys.PURCHASES, data.purchases || []);
-                    if (data.lastBill) localStorage.setItem(this.store.keys.LAST_BILL, data.lastBill);
+        if (extension === 'json') {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (data.settings && data.products) {
+                        if (!confirm('This will overwrite current data. Continue?')) return;
 
-                    alert('Restore Successful! App will reload.');
-                    location.reload();
-                } else {
-                    alert('Invalid Backup File');
+                        this.store.saveSettings(data.settings);
+                        this.store.set(this.store.keys.PRODUCTS, data.products);
+                        this.store.set(this.store.keys.STAFF, data.staff || []);
+                        this.store.set(this.store.keys.SALES, data.sales || []);
+                        this.store.set(this.store.keys.EXPENSES, data.expenses || []);
+                        this.store.set(this.store.keys.PURCHASES, data.purchases || []);
+                        if (data.lastBill) localStorage.setItem(this.store.keys.LAST_BILL, data.lastBill);
+
+                        alert('Restore Successful! App will reload.');
+                        location.reload();
+                    } else {
+                        alert('Invalid Backup File');
+                    }
+                } catch (err) {
+                    alert('Error parsing file');
                 }
-            } catch (err) {
-                alert('Error parsing file');
-            }
-        };
-        reader.readAsText(file);
+            };
+            reader.readAsText(file);
+        } else if (['xlsx', 'xls'].includes(extension)) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const wb = XLSX.read(data, { type: 'array' });
+                    const restoredData = {};
+
+                    // Helpers
+                    const sheetToJson = (name) => wb.Sheets[name] ? XLSX.utils.sheet_to_json(wb.Sheets[name]) : [];
+
+                    // 1. Settings
+                    const settingsArr = sheetToJson("Settings");
+                    if (settingsArr.length > 0) {
+                        const settings = {};
+                        settingsArr.forEach(row => {
+                            // Convert string bools back if necessary, though usually they are preserved
+                            if (row.Key === 'lastBill') {
+                                restoredData.lastBill = row.Value;
+                            } else {
+                                settings[row.Key] = row.Value;
+                            }
+                        });
+                        // Basic Type Conversion
+                        if (settings.defaultGstPercent) settings.defaultGstPercent = parseFloat(settings.defaultGstPercent);
+                        if (settings.lowStockThreshold) settings.lowStockThreshold = parseInt(settings.lowStockThreshold);
+                        if (settings.printLogo === 'TRUE' || settings.printLogo === true) settings.printLogo = true;
+                        if (settings.printLogo === 'FALSE' || settings.printLogo === false) settings.printLogo = false;
+                        if (settings.printTax === 'TRUE' || settings.printTax === true) settings.printTax = true;
+                        if (settings.printTax === 'FALSE' || settings.printTax === false) settings.printTax = false;
+
+                        restoredData.settings = settings;
+                    }
+
+                    // 2. Products
+                    restoredData.products = sheetToJson("Products");
+
+                    // 3. Staff
+                    restoredData.staff = sheetToJson("Staff");
+
+                    // 4. Sales
+                    const rawSales = sheetToJson("Sales");
+                    restoredData.sales = rawSales.map(s => {
+                        if (s.items_json) {
+                            try { s.items = JSON.parse(s.items_json); } catch (e) { console.error("Error parsing sales items", e); }
+                        }
+                        return s;
+                    });
+
+                    // 5. Expenses
+                    restoredData.expenses = sheetToJson("Expenses");
+
+                    // 6. Purchases
+                    const rawPurchases = sheetToJson("Purchases");
+                    restoredData.purchases = rawPurchases.map(p => {
+                        if (p.items_json) {
+                            try { p.items = JSON.parse(p.items_json); } catch (e) { console.error("Error parsing purchase items", e); }
+                        }
+                        return p;
+                    });
+
+                    if (restoredData.products.length > 0) {
+                        if (!confirm('This will overwrite current data. Continue?')) return;
+
+                        if (restoredData.settings) this.store.saveSettings(restoredData.settings);
+                        this.store.set(this.store.keys.PRODUCTS, restoredData.products);
+                        this.store.set(this.store.keys.STAFF, restoredData.staff);
+                        this.store.set(this.store.keys.SALES, restoredData.sales);
+                        this.store.set(this.store.keys.EXPENSES, restoredData.expenses);
+                        this.store.set(this.store.keys.PURCHASES, restoredData.purchases);
+                        if (restoredData.lastBill) localStorage.setItem(this.store.keys.LAST_BILL, restoredData.lastBill);
+
+                        alert('Restore Successful! App will reload.');
+                        location.reload();
+                    } else {
+                        alert('No products found in Excel backup. Please check sheet names.');
+                    }
+
+                } catch (err) {
+                    console.error(err);
+                    alert('Error parsing Excel file. Ensure valid format.');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        } else {
+            alert('Invalid file format. Please upload .json or .xlsx');
+        }
     }
 
     factoryReset() {
@@ -1148,92 +1220,96 @@ class App {
         const showLogo = this.state.settings.printLogo !== false;
         const showTax = this.state.settings.printTax !== false;
         const hasLogo = this.state.settings.logo && showLogo;
-        const logoHtml = hasLogo ? `<img src="${this.state.settings.logo}" style="max-height: 60px; max-width: 60px; object-fit: contain; margin-right: 15px;">` : '';
+        const logoImg = hasLogo ? `<img src="${this.state.settings.logo}" style="max-height: 50px; max-width: 50px; margin-right: 10px;">` : '';
 
-        const headerContent = `
-            <div>
-                <h2 style="margin:0; font-size: 18px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">${this.state.settings.shopName}</h2>
-                <div style="font-size: 11px; margin-top: 4px; line-height: 1.3;">
-                    <p style="margin:0;">${this.state.settings.address}</p>
-                    <p style="margin:0;">GST: ${this.state.settings.gstNo}</p>
-                </div>
-                <div style="margin-top: 12px; margin-bottom: 5px; font-size: 11px; display: flex; justify-content: space-between; border-bottom: 1px solid #ddd; padding-bottom: 8px;">
-                     <div>
-                        <div style="color: #555;">Bill No</div>
-                        <div style="font-weight: 600;">#${sale.billNo}</div>
-                     </div>
-                     <div style="text-align: right;">
-                        <div style="color: #555;">Date</div>
-                        <div style="font-weight: 600;">${new Date(sale.date).toLocaleDateString()} ${new Date(sale.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                     </div>
-                </div>
-                ${sale.customer && sale.customer !== 'Guest' ? `
-                <div style="font-size: 11px; margin-bottom: 5px;">
-                    Customer: <b>${sale.customer}</b>
-                </div>` : ''}
-            </div>
-        `;
+        // Header Section
+        let headerHtml = '';
+        const gstLine = showTax && this.state.settings.gstNo ? `<p style="margin:0; font-size: 11px;">GST: ${this.state.settings.gstNo}</p>` : '';
+        const gstLinePlain = showTax && this.state.settings.gstNo ? `<p>GST: ${this.state.settings.gstNo}</p>` : '';
 
-        const headerHtml = hasLogo ?
-            `<div style="display: flex; align-items: flex-start; justify-content: flex-start; margin-bottom: 10px; text-align: left; gap: 10px;">
-                ${logoHtml}
-                <div style="flex: 1;">${headerContent}</div>
-             </div>` :
-            `<div style="text-align: center; margin-bottom: 10px;">
-                ${headerContent}
-            </div>`;
+        if (hasLogo) {
+            headerHtml = `
+                <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
+                    ${logoImg}
+                    <div style="text-align: left;">
+                        <h2 style="margin:0; font-size: 16px; font-weight: 800; text-transform: uppercase;">${this.state.settings.shopName}</h2>
+                        <p style="margin:2px 0; font-size: 11px;">${this.state.settings.address}</p>
+                        ${gstLine}
+                    </div>
+                </div>`;
+        } else {
+            headerHtml = `
+                <div class="receipt-header">
+                    <h2>${this.state.settings.shopName}</h2>
+                    <p>${this.state.settings.address}</p>
+                    ${gstLinePlain}
+                </div>`;
+        }
 
-        // Tax display section - only show if printTax is true
-        const taxHtml = showTax ? `
-            <div style="display: flex; justify-content: space-between;">
-                <span>GST (${this.state.settings.defaultGstPercent}%)</span><span>${sale.tax.toFixed(2)}</span>
-            </div>` : '';
+        // Customer Info
+        const customerHtml = sale.customer && sale.customer !== 'Guest' ?
+            `<div class="receipt-customer">Customer: <b>${sale.customer}</b></div>` : '';
+
+        // Table Rows
+        const rowsHtml = sale.items.map(i => `
+            <tr>
+                <td>
+                    <div class="font-bold">${i.name}</div>
+                    ${i.unit ? `<div style="font-size: 10px; color: #444;">${i.unit}</div>` : ''}
+                </td>
+                <td class="text-center">${i.qty}</td>
+                <td class="text-right">${(i.price * i.qty).toFixed(2)}</td>
+            </tr>
+        `).join('');
 
         const receiptHtml = `
-            <div style="font-family: inherit; font-size: 12px; line-height: 1.5; color: #000;">
+            <div class="receipt-content">
                 ${headerHtml}
-                <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
-                <table style="width: 100%; text-align: left; border-collapse: collapse;">
+                
+                <div class="receipt-info">
+                    <div>Bill No: <b>#${sale.billNo}</b></div>
+                    <div class="text-right">${new Date(sale.date).toLocaleDateString()} ${new Date(sale.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                </div>
+
+                ${customerHtml}
+
+                <table class="receipt-table">
                     <thead>
-                        <tr style="border-bottom: 1px solid #000;">
-                            <th style="padding: 5px 0; font-weight: 600; width:50%">Item</th>
-                            <th style="padding: 5px 0; font-weight: 600; width:20%; text-align: center;">Qty</th>
-                            <th style="padding: 5px 0; font-weight: 600; text-align:right">Amt</th>
+                        <tr>
+                            <th width="50%">Item</th>
+                            <th width="20%" class="text-center">Qty</th>
+                            <th width="30%" class="text-right">Amt</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${sale.items.map(i => `
-                            <tr>
-                                <td style="padding: 4px 0; vertical-align: top;">
-                                    <div style="font-weight: 500;">${i.name}</div>
-                                    ${i.unit ? `<div style="font-size: 10px; color: #444;">${i.unit}</div>` : ''}
-                                </td>
-                                <td style="padding: 4px 0; text-align: center; vertical-align: top;">${i.qty}</td>
-                                <td style="padding: 4px 0; text-align:right; vertical-align: top;">${(i.price * i.qty).toFixed(2)}</td>
-                            </tr>
-                        `).join('')}
+                        ${rowsHtml}
                     </tbody>
                 </table>
-                <div style="border-bottom: 1px solid #000; margin: 10px 0;"></div>
-                
-                ${showTax ? `
-                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                    <span>Subtotal</span><span>${sale.subtotal.toFixed(2)}</span>
+
+                <div class="receipt-totals">
+                    ${showTax ? `
+                    <div class="totals-row">
+                        <span>Subtotal</span>
+                        <span>${sale.subtotal.toFixed(2)}</span>
+                    </div>
+                    <div class="totals-row">
+                        <span>GST (${this.state.settings.defaultGstPercent}%)</span>
+                        <span>${sale.tax.toFixed(2)}</span>
+                    </div>` : ''}
+                    
+                    <div class="totals-row final">
+                        <span>TOTAL</span>
+                        <span>${sale.total.toFixed(2)}</span>
+                    </div>
                 </div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                     <span>GST (${this.state.settings.defaultGstPercent}%)</span><span>${sale.tax.toFixed(2)}</span>
-                </div>` : ''}
-                
-                 <div style="display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 16px; margin-top: 5px; border-top: 1px solid #000; padding-top: 10px;">
-                    <span>TOTAL</span><span>${sale.total.toFixed(2)}</span>
-                </div>
-                
-                 <div style="text-align: center; margin-top: 20px; font-size: 10px;">
-                    <p style="margin: 0;">*** Thank You ***</p>
-                    <p style="margin: 4px 0 0 0;">Values in INR</p>
+
+                <div class="receipt-footer">
+                    <p>*** Thank You ***</p>
+                    <p style="margin-top: 5px;">Values in INR</p>
                 </div>
             </div>
         `;
+
         document.getElementById('receipt-container').innerHTML = receiptHtml;
 
         // Show receipt for printing
@@ -1242,7 +1318,7 @@ class App {
 
         window.print();
 
-        // Hide again after print (small delay to ensure print dialog catches it)
+        // Hide again after print
         setTimeout(() => {
             container.classList.add('hidden');
             container.innerHTML = '';
@@ -2289,6 +2365,15 @@ class App {
         const dateStr = getTodayDate();
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
         const wb = XLSX.utils.book_new();
+
+        // 0. Settings & Metadata
+        const settings = this.store.getSettings();
+        const lastBill = localStorage.getItem(this.store.keys.LAST_BILL);
+        const settingsData = Object.entries(settings).map(([k, v]) => ({ Key: k, Value: v }));
+        if (lastBill) settingsData.push({ Key: 'lastBill', Value: lastBill });
+
+        const settingsSheet = XLSX.utils.json_to_sheet(settingsData);
+        XLSX.utils.book_append_sheet(wb, settingsSheet, "Settings");
 
         // 1. Products (Inventory)
         const products = this.store.getProducts();
