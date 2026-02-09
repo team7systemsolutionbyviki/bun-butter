@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bun Butter POS</title>
+    <meta name="theme-color" content="#2e7d32">
+    <meta name="description" content="Offline-first Bakery POS System">
+    <link rel="stylesheet" href="style.css">
+    <!-- Google Fonts: Roboto & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto:wght@400;500;700&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div id="app">
+        <!-- Auth Screen (Initially Visible) -->
+        <section id="auth-section" class="active-section">
+            <div class="auth-container">
+                <h1 class="logo-text">Bun Butter</h1>
+                <p class="subtitle">Bakery POS System</p>
+                <div class="login-form">
+                    <div class="form-group">
+                        <label for="login-username" style="text-align: left;">Username</label>
+                        <input type="text" id="login-username" placeholder="Username" autocomplete="username">
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password" style="text-align: left;">Password</label>
+                        <input type="password" id="login-password" placeholder="Password"
+                            autocomplete="current-password">
+                    </div>
+                    <button class="btn btn-primary btn-lg" id="login-btn">Login</button>
+                    <!-- Fallback message area -->
+                    <p id="login-error" style="color:red; margin-top:10px; display:none;">Invalid Credentials</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Dashboard (Hidden) -->
+        <div id="dashboard-container" class="hidden">
+            <!-- Sidebar Navigation -->
+            <nav id="sidebar">
+                <div class="nav-brand">
+                    <h2>POS</h2>
+                </div>
+                <ul class="nav-links">
+                    <li class="nav-item active" data-target="billing">
+                        <span class="icon">🛒</span>
+                        <span>Billing</span>
+                    </li>
+                    <div class="nav-item admin-only" data-target="inventory">
+                        <span class="icon">📦</span>
+                        <span>Inventory</span>
+                    </div>
+                    <div class="nav-item admin-only" data-target="categories">
+                        <span class="icon">🏷️</span>
+                        <span>Categories</span>
+                    </div>
+                    <div class="nav-item admin-only" data-target="staff">
+                        <span class="icon">👥</span>
+                        <span>Staff</span>
+                    </div>
+                    <div class="nav-item admin-only" data-target="reports">
+                        <span class="icon">📊</span>
+                        <span>Reports</span>
+                    </div>
+                    <div class="nav-item admin-only" data-target="settings">
+                        <span class="icon">⚙️</span>
+                        <span>Settings</span>
+                    </div>
+                    <li class="nav-item logout-btn" id="logout-btn">
+                        <span class="icon">🚪</span>
+                        <span>Logout</span>
+                    </li>
+                </ul>
+                <div class="user-info">
+                    <span id="current-user-name">Staff</span>
+                    <small id="current-user-role">Cashier</small>
+                </div>
+            </nav>
+
+            <!-- Main Content Area -->
+            <main id="main-content">
+                <!-- Billing Interface -->
+                <section id="billing-section" class="content-section active">
+                    <div class="billing-layout">
+                        <div class="products-area">
+                            <div class="filter-bar">
+                                <select id="category-filter" class="filter-select">
+                                    <option value="all">All Categories</option>
+                                    <!-- Categories injected here -->
+                                </select>
+                                <input type="text" id="product-search" class="search-input"
+                                    placeholder="Search products...">
+                                <button class="btn btn-warning" id="add-expense-btn" style="margin-left: 10px;">+
+                                    Expense</button>
+                            </div>
+                            <div class="product-grid" id="product-grid">
+                                <!-- Products injected here -->
+                            </div>
+                        </div>
+                        <div class="cart-panel">
+                            <div class="cart-header">
+                                <h3>Current Bill</h3>
+                                <span id="bill-no">#0001</span>
+                            </div>
+                            <div class="cart-items" id="cart-items">
+                                <!-- Cart Items -->
+                                <div class="empty-cart-msg">Cart is empty</div>
+                            </div>
+                            <div class="cart-summary">
+                                <div class="summary-row">
+                                    <span>Subtotal</span>
+                                    <span id="subtotal-display">₹0.00</span>
+                                </div>
+                                <div class="summary-row">
+                                    <span>Discount</span>
+                                    <span id="discount-display">₹0.00</span>
+                                </div>
+                                <div class="summary-row">
+                                    <span>GST (<span id="gst-rate-display">0</span>%)</span>
+                                    <span id="gst-display">₹0.00</span>
+                                </div>
+                                <div class="summary-row total-row">
+                                    <span>Total</span>
+                                    <span id="total-display">₹0.00</span>
+                                </div>
+                            </div>
+                            <div class="cart-actions">
+                                <button class="btn btn-secondary" id="hold-btn">Hold</button>
+                                <button class="btn btn-primary" id="checkout-btn">Checkout</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Other sections will be added dynamically or are hidden initially -->
+                <section id="inventory-section" class="content-section hidden">
+                    <div class="inventory-scroll-wrapper"
+                        style="overflow-y: auto; max-height: calc(100vh - 100px); padding-right: 10px;">
+                        <header class="section-header">
+                            <h2>Inventory Management</h2>
+                            <div style="display: flex; gap: 10px;">
+                                <button class="btn btn-primary" id="add-product-btn">+ Add Product</button>
+                                <button class="btn btn-success" id="add-purchase-btn">+ Purchase</button>
+                            </div>
+                        </header>
+                        <div style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button class="btn btn-sm" id="stock-filter-all"
+                                style="background: #3498db; color: white;">All Products</button>
+                            <button class="btn btn-sm" id="stock-filter-instock"
+                                style="background: #27ae60; color: white;">In Stock</button>
+                            <button class="btn btn-sm" id="stock-filter-low"
+                                style="background: #f39c12; color: white;">Low Stock</button>
+                            <button class="btn btn-sm" id="stock-filter-out"
+                                style="background: #e74c3c; color: white;">Out of Stock</button>
+                        </div>
+                        <div class="table-container">
+                            <table class="data-table" id="inventory-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Category</th>
+                                        <th>Unit</th>
+                                        <th>Purchase Price</th>
+                                        <th>Sales Price</th>
+                                        <th>Stock</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Categories Section -->
+                <section id="categories-section" class="content-section hidden">
+                    <div class="categories-scroll-wrapper"
+                        style="overflow-y: auto; max-height: calc(100vh - 100px); padding-right: 10px;">
+                        <header class="section-header">
+                            <h2>Category Management</h2>
+                            <button class="btn btn-primary" id="add-category-btn">+ Add Category</button>
+                        </header>
+                        <div class="table-container">
+                            <table class="data-table" id="categories-table">
+                                <thead>
+                                    <tr>
+                                        <th>Category Name</th>
+                                        <th>Product Count</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="staff-section" class="content-section hidden">
+                    <div class="staff-scroll-wrapper"
+                        style="overflow-y: auto; max-height: calc(100vh - 100px); padding-right: 10px;">
+                        <header class="section-header">
+                            <h2>Staff Management</h2>
+                            <button class="btn btn-primary" id="add-staff-btn">+ Add Staff</button>
+                        </header>
+                        <div class="table-container">
+                            <table class="data-table" id="staff-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Role</th>
+                                        <th>PIN</th>
+                                        <th>Salary</th>
+                                        <th>Attd. (Month)</th>
+                                        <th>Salary Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="reports-section" class="content-section hidden">
+                    <div class="reports-scroll-wrapper"
+                        style="overflow-y: auto; max-height: calc(100vh - 100px); padding-right: 10px;">
+                        <header class="section-header">
+                            <h2>Reports</h2>
+                            <div class="date-filters">
+                                <input type="date" id="report-date" value="">
+                                <input type="text" id="report-search" placeholder="Search Bill # or Name"
+                                    style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; margin-left: 10px;">
+                                <button id="opening-balance-btn" class="btn btn-primary"
+                                    style="margin-left: 10px; background-color: #673ab7;">
+                                    💰 Set Opening Cash
+                                </button>
+                                <button id="export-excel-btn" class="btn btn-success" style="margin-left: 10px;">
+                                    📊 Export to Excel
+                                </button>
+                            </div>
+                        </header>
+                        <div class="report-cards">
+                            <div class="card">
+                                <h3>Total Sales</h3>
+                                <p id="report-sales-total">₹0</p>
+                            </div>
+                            <div class="card">
+                                <h3>Cash</h3>
+                                <p id="report-cash-total">₹0</p>
+                            </div>
+                            <div class="card">
+                                <h3>UPI</h3>
+                                <p id="report-upi-total">₹0</p>
+                            </div>
+                            <div class="card">
+                                <h3>Salary Expenses</h3>
+                                <p id="report-salary-expenses">₹0</p>
+                            </div>
+                            <div class="card">
+                                <h3>Total Expenses</h3>
+                                <p id="report-total-expenses">₹0</p>
+                            </div>
+                            <div class="card">
+                                <h3>Total Expenses</h3>
+                                <p id="report-total-expenses">₹0</p>
+                            </div>
+                            <div class="card"
+                                style="background: linear-gradient(135deg, #673ab7, #512da8); color: white;">
+                                <h3>Opening Balance</h3>
+                                <p id="report-opening-balance">₹0</p>
+                            </div>
+                            <div class="card"
+                                style="background: linear-gradient(135deg, #27ae60, #2ecc71); color: white;">
+                                <h3>Cash in Hand</h3>
+                                <p id="report-cash-in-hand" title="Opening Balance + Cash Sales">₹0</p>
+                            </div>
+                            <div class="card">
+                                <h3>Net Profit</h3>
+                                <p id="report-profit">₹0</p>
+                            </div>
+                        </div>
+
+                        <!-- Expense Breakdown Table -->
+                        <div class="table-container" style="margin-top: 20px;">
+                            <h3 style="margin-bottom: 10px;">Expense Breakdown</h3>
+                            <table class="data-table" id="expenses-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Category</th>
+                                        <th>Description</th>
+                                        <th>Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+
+                        <!-- Cash Transactions Table -->
+                        <div class="table-container" style="margin-top: 20px;">
+                            <h3 style="margin-bottom: 10px;">Cash Transactions</h3>
+                            <table class="data-table" id="cash-sales-table">
+                                <thead>
+                                    <tr>
+                                        <th>Time</th>
+                                        <th>Bill #</th>
+                                        <th>Items</th>
+                                        <th>Total</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+
+                        <!-- UPI Transactions Table -->
+                        <div class="table-container" style="margin-top: 20px;">
+                            <h3 style="margin-bottom: 10px;">UPI Transactions</h3>
+                            <table class="data-table" id="upi-sales-table">
+                                <thead>
+                                    <tr>
+                                        <th>Time</th>
+                                        <th>Bill #</th>
+                                        <th>Items</th>
+                                        <th>Total</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+
+                        <!-- Purchase History Table -->
+                        <div class="table-container" style="margin-top: 20px;">
+                            <h3 style="margin-bottom: 10px;">Purchase History</h3>
+                            <table class="data-table" id="purchase-history-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Supplier</th>
+                                        <th>Items</th>
+                                        <th>Total Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+
+                        <!-- Stock Movement Report -->
+                        <div class="table-container" style="margin-top: 20px;">
+                            <h3 style="margin-bottom: 10px;">Stock Movement Report</h3>
+                            <table class="data-table" id="stock-movement-table">
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Stock In (Purchase)</th>
+                                        <th>Stock Out (Sales)</th>
+                                        <th>Net Movement</th>
+                                        <th>Current Stock</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="settings-section" class="content-section hidden">
+                    <div class="settings-scroll-wrapper"
+                        style="overflow-y: auto; max-height: calc(100vh - 100px); padding-right: 10px;">
+                        <header class="section-header">
+                            <h2>Settings</h2>
+                        </header>
+                        <div class="settings-form">
+                            <div class="form-group">
+                                <label>Shop Name</label>
+                                <input type="text" id="shop-name" value="Bun Butter">
+                            </div>
+                            <div class="form-group">
+                                <label>Address</label>
+                                <input type="text" id="shop-address" value="">
+                            </div>
+                            <div class="form-group">
+                                <label>GST Number</label>
+                                <input type="text" id="shop-gst" value="">
+                            </div>
+                            <div class="form-group">
+                                <label>Default GST %</label>
+                                <input type="number" id="shop-gst-percent" min="0" max="100" step="0.01">
+                            </div>
+                            <div class="form-group">
+                                <label>Low Stock Alert Threshold</label>
+                                <input type="number" id="low-stock-threshold" min="0" placeholder="e.g., 10" value="10">
+                                <small style="color: #666;">Products with stock below this level will be flagged as low
+                                    stock</small>
+                            </div>
+                            <div class="form-group">
+                                <label>Shop Logo</label>
+                                <input type="file" id="shop-logo" accept="image/*">
+                                <img id="logo-preview" style="max-height: 60px; display: none; margin-top: 10px;">
+                                <input type="hidden" id="shop-logo-data">
+                                <div style="margin-top: 10px; display: flex; align-items: center; gap: 10px;">
+                                    <input type="checkbox" id="print-logo-check" style="width: auto;">
+                                    <label for="print-logo-check" style="margin: 0; font-weight: normal;">Print Logo on
+                                        Receipt</label>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <input type="checkbox" id="print-tax-check" style="width: auto;" checked>
+                                    <label for="print-tax-check" style="margin: 0; font-weight: normal;">Print Tax/GST
+                                        on Receipt</label>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>UPI QR Code</label>
+                                <input type="file" id="shop-qr" accept="image/*">
+                                <img id="qr-preview" style="max-height: 100px; display: none; margin-top: 10px;">
+                                <input type="hidden" id="shop-qr-data">
+                            </div>
+                            <div class="form-group">
+                                <label>Data Management</label>
+                                <div class="btn-group">
+                                    <button class="btn btn-secondary" id="backup-btn">Backup Data (JSON)</button>
+                                    <button class="btn btn-warning" id="restore-btn">Restore Data</button>
+                                    <button class="btn btn-danger" id="reset-btn">Factory Reset</button>
+                                </div>
+                                <input type="file" id="restore-file" hidden accept=".json">
+                            </div>
+                            <button class="btn btn-primary" id="save-settings-btn">Save Settings</button>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+
+        <!-- Modals -->
+        <div id="modal-overlay" class="hidden">
+            <!-- Checkout Modal -->
+            <div id="checkout-modal" class="modal hidden">
+                <div class="modal-header">
+                    <h3>Confirm Payment</h3>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                    <div class="payment-total">
+                        <span>To Pay:</span>
+                        <h1 id="checkout-total">₹0.00</h1>
+                    </div>
+                    <div class="payment-modes">
+                        <button class="pay-mode-btn selected" data-mode="cash">
+                            <span>💵</span> Cash
+                        </button>
+                        <button class="pay-mode-btn" data-mode="upi">
+                            <span>📱</span> UPI
+                        </button>
+                    </div>
+                    <div id="upi-qr-display" class="hidden" style="text-align: center; margin-bottom: 20px;">
+                        <img id="checkout-qr-img"
+                            style="max-width: 200px; border: 1px solid #ccc; padding: 10px; border-radius: 8px;">
+                        <p style="margin-top: 5px; color: #555;">Scan to Pay</p>
+                    </div>
+                    <div class="form-group">
+                        <label>Customer Name (Optional)</label>
+                        <input type="text" id="cust-name-input" placeholder="Guest">
+                    </div>
+                    <div class="form-group hidden" id="split-payment-group">
+                        <!-- Split logic container -->
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-lg btn-success" id="confirm-pay-btn">Complete Sale</button>
+                </div>
+            </div>
+
+            <!-- Generic Form Modal (Product/Staff) -->
+            <div id="form-modal" class="modal hidden">
+                <div class="modal-header">
+                    <h3 id="form-modal-title">Edit</h3>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <div class="modal-body" id="form-modal-body" style="max-height: 70vh; overflow-y: auto;">
+                    <!-- Dynamic form content -->
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" id="form-save-btn">Save</button>
+                </div>
+            </div>
+
+            <!-- Attendance Marking Modal -->
+            <div id="attendance-modal" class="modal hidden">
+                <div class="modal-header">
+                    <h3>Mark Attendance - <span id="attendance-staff-name"></span></h3>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                    <input type="hidden" id="attendance-staff-id">
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input type="date" id="attendance-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select id="attendance-status">
+                            <option value="present">Present</option>
+                            <option value="halfday">Half Day Present</option>
+                            <option value="absent">Absent</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" id="save-attendance-btn">Mark Attendance</button>
+                </div>
+            </div>
+
+            <!-- Finance Manager Modal -->
+            <div id="finance-modal" class="modal hidden">
+                <div class="modal-header">
+                    <h3>Finance Manager - <span id="finance-staff-name"></span></h3>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <div class="modal-body" style="max-height: 80vh; overflow-y: auto;">
+                    <input type="hidden" id="finance-staff-id">
+
+                    <!-- Tabs -->
+                    <div
+                        style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+                        <button class="btn btn-sm" id="tab-salary" style="background: #2196F3; color: white;">Monthly
+                            Salary</button>
+                        <button class="btn btn-sm" id="tab-transactions"
+                            style="background: #e0e0e0; color: #333;">Bonuses & Advances</button>
+                    </div>
+
+                    <!-- Panel: Salary (Existing Logic) -->
+                    <div id="panel-salary">
+                        <div id="salary-payment-info"></div>
+                        <div class="form-group">
+                            <label>Month</label>
+                            <select id="salary-month">
+                                <option value="0">January</option>
+                                <option value="1">February</option>
+                                <option value="2">March</option>
+                                <option value="3">April</option>
+                                <option value="4">May</option>
+                                <option value="5">June</option>
+                                <option value="6">July</option>
+                                <option value="7">August</option>
+                                <option value="8">September</option>
+                                <option value="9">October</option>
+                                <option value="10">November</option>
+                                <option value="11">December</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Year</label>
+                            <input type="number" id="salary-year" min="2020" max="2099" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Amount</label>
+                            <input type="number" id="salary-amount" step="0.01" required>
+                            <div id="salary-calc-details"
+                                style="margin-top: 5px; font-size: 0.9em; color: #666; font-style: italic;"></div>
+                        </div>
+                        <button class="btn btn-success" id="mark-salary-paid-btn" style="width: 100%;">Mark Salary
+                            Paid</button>
+                    </div>
+
+                    <!-- Panel: Transactions (New) -->
+                    <div id="panel-transactions" class="hidden">
+                        <div class="form-group" style="background: #f9f9f9; padding: 15px; border-radius: 8px;">
+                            <label>Record New Transaction</label>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                                <select id="trans-type">
+                                    <option value="bonus">🎁 Bonus</option>
+                                    <option value="advance">💸 Advance Given</option>
+                                    <option value="return">🔙 Advance Returned</option>
+                                </select>
+                                <input type="number" id="trans-amount" placeholder="Amount" step="0.01">
+                            </div>
+                            <input type="date" id="trans-date" style="margin-bottom: 10px;">
+                            <input type="text" id="trans-notes" placeholder="Notes (e.g. Diwali Bonus)"
+                                style="margin-bottom: 10px;">
+                            <button class="btn btn-primary btn-sm" id="save-trans-btn">Save Transaction</button>
+                        </div>
+
+                        <h4 style="margin-top: 20px;">History</h4>
+                        <table class="data-table" id="finance-history-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Type</th>
+                                    <th>Amount</th>
+                                    <th>Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Expense Recording Modal -->
+            <div id="expense-modal" class="modal hidden">
+                <div class="modal-header">
+                    <h3>Add Expense</h3>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input type="date" id="expense-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <input type="text" id="expense-description" placeholder="E.g., Rent payment, Electricity bill"
+                            required>
+                    </div>
+                    <div class="form-group">
+                        <label>Category</label>
+                        <select id="expense-category">
+                            <option value="Rent">Rent</option>
+                            <option value="Utilities">Utilities</option>
+                            <option value="Supplies">Supplies</option>
+                            <option value="Maintenance">Maintenance</option>
+                            <option value="Transportation">Transportation</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Amount (₹)</label>
+                        <input type="number" id="expense-amount" step="0.01" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" id="save-expense-btn">Save Expense</button>
+                </div>
+            </div>
+
+            <!-- Purchase Modal -->
+            <div id="purchase-modal" class="modal hidden">
+                <div class="modal-header">
+                    <h3>Record Purchase</h3>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input type="date" id="purchase-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Supplier Name</label>
+                        <input type="text" id="purchase-supplier" placeholder="Supplier name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Product</label>
+                        <select id="purchase-product">
+                            <option value="">Select Product</option>
+                            <!-- Products will be populated -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Quantity</label>
+                        <input type="number" id="purchase-quantity" min="1" placeholder="Quantity">
+                    </div>
+                    <div class="form-group">
+                        <label>Purchase Price (per unit)</label>
+                        <input type="number" id="purchase-price" step="0.01" placeholder="Price per unit">
+                    </div>
+                    <button class="btn btn-secondary" id="add-purchase-item-btn" style="margin-bottom: 15px;">Add
+                        Item</button>
+
+                    <div class="form-group">
+                        <label>Items in Purchase</label>
+                        <div id="purchase-items-list"
+                            style="border: 1px solid #ddd; border-radius: 4px; padding: 10px; min-height: 60px; background: #f9f9f9;">
+                            <em style="color: #999;">No items added yet</em>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Total Amount</label>
+                        <div id="purchase-total" style="font-size: 1.2em; font-weight: bold; color: #2ecc71;">₹0.00
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Notes (optional)</label>
+                        <textarea id="purchase-notes" rows="2"
+                            style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" id="save-purchase-btn">Save Purchase</button>
+                </div>
+            </div>
+
+            <!-- Category Modal -->
+            <div id="category-modal" class="modal hidden">
+                <div class="modal-header">
+                    <h3 id="category-modal-title">Add Category</h3>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                    <input type="hidden" id="category-id">
+                    <div class="form-group">
+                        <label>Category Name</label>
+                        <input type="text" id="category-name" placeholder="Enter category name" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" id="save-category-btn">Save Category</button>
+                </div>
+            </div>
+            <!-- Opening Balance Modal -->
+            <div id="opening-balance-modal" class="modal hidden">
+                <div class="modal-header">
+                    <h3>Set Day's Opening Balance</h3>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input type="text" id="opening-balance-date" readonly style="background: #f0f0f0;">
+                    </div>
+                    <div class="form-group">
+                        <label>Opening Cash Amount (₹)</label>
+                        <input type="number" id="opening-balance-amount" step="0.01" placeholder="e.g. 500">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" id="save-opening-balance-btn">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Receipt Container (Hidden except print) -->
+        <div id="receipt-container" class="hidden"></div>
+    </div>
+
+    <!-- SheetJS for Excel Export -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
