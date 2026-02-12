@@ -617,6 +617,31 @@ class UI {
         };
         updateCalculation();
 
+        // WhatsApp Button Logic
+        const waBtn = document.getElementById('send-salary-whatsapp-btn');
+        if (waBtn) {
+            waBtn.onclick = () => {
+                const m = parseInt(document.getElementById('salary-month').value);
+                const y = parseInt(document.getElementById('salary-year').value);
+                const calc = this.calculatePayableSalary(staff, m, y);
+
+                if (!staff.phone) {
+                    alert('Please add a phone number for this staff member first.');
+                    return;
+                }
+
+                const monthName = new Date(y, m).toLocaleString('default', { month: 'long' });
+                const message = `*Salary Details for ${staff.name}*\n` +
+                    `Month: ${monthName} ${y}\n` +
+                    `Days Present: ${calc.daysPresent}/${calc.daysInMonth}\n` +
+                    `Daily Rate: ₹${calc.dailyRate.toFixed(2)}\n` +
+                    `*Net Payable: ₹${calc.amount}*`;
+
+                const url = `https://wa.me/${staff.phone}?text=${encodeURIComponent(message)}`;
+                window.open(url, '_blank');
+            };
+        }
+
         // Event Listeners for Salary inputs
         const mSelect = document.getElementById('salary-month');
         const yInput = document.getElementById('salary-year');
@@ -699,6 +724,10 @@ class UI {
             <div class="form-group">
                 <label>Password</label>
                 <input type="password" id="staff-password" value="${isEdit ? staff.password : ''}" required>
+            </div>
+            <div class="form-group">
+                <label>Phone Number</label>
+                <input type="text" id="staff-phone" value="${isEdit ? (staff.phone || '') : ''}" placeholder="e.g. 9876543210">
             </div>
             <div class="form-group">
                 <label>Salary (Monthly)</label>
@@ -1270,7 +1299,9 @@ class App {
             total,
             mode,
             customer,
-            staffId: this.state.currentUser.id
+            customer,
+            staffId: this.state.currentUser.id,
+            staffName: this.state.currentUser.name
         };
 
         this.store.addSale(sale);
@@ -1339,6 +1370,7 @@ class App {
                 <div class="receipt-info">
                     <div>Bill No: <b>#${sale.billNo}</b></div>
                     <div class="text-right">${new Date(sale.date).toLocaleDateString()} ${new Date(sale.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                    <div style="font-size: 11px; margin-top: 2px;">Billed By: <b>${sale.staffName || (this.store.getStaff().find(s => s.id === sale.staffId)?.name) || 'Staff'}</b></div>
                 </div>
 
                 ${customerHtml}
@@ -1598,6 +1630,7 @@ class App {
         const role = document.getElementById('staff-role').value;
         const username = document.getElementById('staff-username').value;
         const password = document.getElementById('staff-password').value;
+        const phone = document.getElementById('staff-phone').value;
         const salary = parseFloat(document.getElementById('staff-salary').value) || 0;
 
         if (!name || !username || !password) {
@@ -1605,7 +1638,7 @@ class App {
             return;
         }
 
-        const staffMember = { id, name, role, username, password, salary, employed: true };
+        const staffMember = { id, name, role, username, password, phone, salary, employed: true };
         this.store.saveStaff(staffMember);
         this.ui.hideModals();
         this.loadStaff();
