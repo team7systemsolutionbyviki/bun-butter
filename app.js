@@ -128,6 +128,47 @@ class Store {
         this.set(this.keys.PRODUCTS, products);
     }
 
+    importProducts(newProducts) {
+        const products = this.getProducts();
+        let added = 0;
+        let updated = 0;
+
+        newProducts.forEach(p => {
+            // Basic validation
+            if (!p.name || !p.price) return;
+
+            const existingIndex = products.findIndex(ep => ep.name.toLowerCase() === p.name.toLowerCase());
+
+            if (existingIndex > -1) {
+                // Update existing
+                const existing = products[existingIndex];
+                existing.stock += (parseInt(p.stock) || 0);
+                existing.price = parseFloat(p.price);
+                if (p.salesPrice) existing.salesPrice = parseFloat(p.salesPrice);
+                if (p.purchasePrice) existing.purchasePrice = parseFloat(p.purchasePrice);
+                if (p.category) existing.category = p.category;
+                products[existingIndex] = existing;
+                updated++;
+            } else {
+                // Add new
+                products.push({
+                    id: generateId(),
+                    name: p.name,
+                    category: p.category || 'Uncategorized',
+                    price: parseFloat(p.price),
+                    salesPrice: parseFloat(p.salesPrice || p.price),
+                    purchasePrice: parseFloat(p.purchasePrice || 0),
+                    stock: parseInt(p.stock) || 0,
+                    unit: p.unit || 'pcs'
+                });
+                added++;
+            }
+        });
+
+        this.set(this.keys.PRODUCTS, products);
+        return { added, updated };
+    }
+
     getStaff() { return this.get(this.keys.STAFF); }
     saveStaff(staffMember) {
         const staff = this.getStaff();
@@ -392,12 +433,21 @@ class UI {
                 <label>Unit</label>
                 <select id="prod-unit">
                     <option value="pcs" ${isEdit && product.unit === 'pcs' ? 'selected' : ''}>Pieces (pcs)</option>
-                    <option value="kg" ${isEdit && product.unit === 'kg' ? 'selected' : ''}>Kilogram (kg)</option>
-                    <option value="g" ${isEdit && product.unit === 'g' ? 'selected' : ''}>Gram (g)</option>
-                    <option value="L" ${isEdit && product.unit === 'L' ? 'selected' : ''}>Liter (L)</option>
-                    <option value="ml" ${isEdit && product.unit === 'ml' ? 'selected' : ''}>Milliliter (ml)</option>
-                    <option value="dozen" ${isEdit && product.unit === 'dozen' ? 'selected' : ''}>Dozen</option>
+                    <option value="pkt" ${isEdit && product.unit === 'pkt' ? 'selected' : ''}>Packet</option>
+                    <option value="bun" ${isEdit && product.unit === 'bun' ? 'selected' : ''}>Bundle</option>
                     <option value="box" ${isEdit && product.unit === 'box' ? 'selected' : ''}>Box</option>
+                    <option value="dozen" ${isEdit && product.unit === 'dozen' ? 'selected' : ''}>Dozen</option>
+                    <option disabled>--- Weight ---</option>
+                    <option value="1kg" ${isEdit && product.unit === '1kg' ? 'selected' : ''}>1 Kg</option>
+                    <option value="500g" ${isEdit && product.unit === '500g' ? 'selected' : ''}>500 g (Half Kg)</option>
+                    <option value="250g" ${isEdit && product.unit === '250g' ? 'selected' : ''}>250 g</option>
+                    <option value="100g" ${isEdit && product.unit === '100g' ? 'selected' : ''}>100 g</option>
+                    <option value="kg" ${isEdit && product.unit === 'kg' ? 'selected' : ''}>Kilogram (Custom)</option>
+                    <option disabled>--- Volume ---</option>
+                    <option value="1L" ${isEdit && product.unit === '1L' ? 'selected' : ''}>1 Liter</option>
+                    <option value="500ml" ${isEdit && product.unit === '500ml' ? 'selected' : ''}>500 ml (Half Liter)</option>
+                    <option value="250ml" ${isEdit && product.unit === '250ml' ? 'selected' : ''}>250 ml</option>
+                    <option value="L" ${isEdit && product.unit === 'L' ? 'selected' : ''}>Liter (Custom)</option>
                 </select>
             </div>
             <div class="form-group">
@@ -798,6 +848,21 @@ class App {
         try {
             document.getElementById('save-settings-btn').onclick = () => this.saveSettings();
             document.getElementById('backup-btn').onclick = () => this.backupData();
+
+            // Excel Import
+            const importBtn = document.getElementById('import-excel-btn');
+            const importInput = document.getElementById('import-excel-input');
+
+            if (importBtn && importInput) {
+                importBtn.onclick = () => importInput.click();
+                importInput.onchange = (e) => this.handleExcelImport(e);
+            }
+            // Template Download
+            const templateBtn = document.getElementById('download-template-btn');
+            if (templateBtn) {
+                templateBtn.onclick = () => this.downloadTemplate();
+            }
+
             document.getElementById('restore-btn').onclick = () => document.getElementById('restore-file').click();
             document.getElementById('restore-file').onchange = (e) => this.restoreData(e);
             document.getElementById('reset-btn').onclick = () => this.factoryReset();
@@ -1305,7 +1370,6 @@ class App {
 
                 <div class="receipt-footer">
                     <p>*** Thank You ***</p>
-                    <p style="margin-top: 5px;">Values in INR</p>
                 </div>
             </div>
         `;
@@ -2361,6 +2425,65 @@ class App {
         XLSX.writeFile(wb, `BunButter_Report_${dateStr}.xlsx`);
     }
 
+    downloadTemplate() {
+        const wb = XLSX.utils.book_new();
+
+        // 1. Template Sheet
+        const headers = ["Name", "Category", "Stock", "Unit", "PurchasePrice", "SalesPrice"];
+        const sampleData = [
+            ["Example Product", "Snacks", 100, "pcs", 8.00, 12.00],
+            ["Milk Bread", "Breads", 50, "pcs", 30, 40]
+        ];
+        const wsTemplate = XLSX.utils.aoa_to_sheet([headers, ...sampleData]);
+
+        // 2. Reference Sheet for Dropdowns
+        const units = ["pcs", "pkt", "bun", "box", "dozen", "1kg", "500g", "250g", "100g", "kg", "1L", "500ml", "250ml", "L"];
+        const products = this.store.getProducts();
+        const categories = [...new Set(products.map(p => p.category).filter(c => c))].sort();
+        if (categories.length === 0) categories.push("General", "Breads", "Cakes", "Snacks");
+
+        const refData = [["Valid Units", "Existing Categories"]];
+        const maxLen = Math.max(units.length, categories.length);
+        for (let i = 0; i < maxLen; i++) {
+            refData.push([
+                units[i] || "",
+                categories[i] || ""
+            ]);
+        }
+        const wsRef = XLSX.utils.aoa_to_sheet(refData);
+
+        // 3. Setup Data Validation (Attempt)
+        // Note: SheetJS CE might strip this, but we try.
+        // Category (Col B), Unit (Col D)
+        if (!wsTemplate['!dataValidation']) wsTemplate['!dataValidation'] = [];
+
+        // Units Validation (D2:D1000)
+        wsTemplate['!dataValidation'].push({
+            sqref: "D2:D1000",
+            type: "list",
+            formula1: "'Valid Options'!$A$2:$A$" + (units.length + 1),
+            showErrorMessage: true,
+            errorTitle: "Invalid Unit",
+            error: "Please select a valid unit from the options sheet"
+        });
+
+        // Categories Validation (B2:B1000)
+        wsTemplate['!dataValidation'].push({
+            sqref: "B2:B1000",
+            type: "list",
+            formula1: "'Valid Options'!$B$2:$B$" + (categories.length + 1),
+            showErrorMessage: true,
+            errorTitle: "Invalid Category",
+            error: "Please use an existing category or add to the list"
+        });
+
+        XLSX.utils.book_append_sheet(wb, wsTemplate, "Template");
+        XLSX.utils.book_append_sheet(wb, wsRef, "Valid Options");
+
+        // Save as XLSX
+        XLSX.writeFile(wb, "BunButter_Product_Template.xlsx");
+    }
+
     backupData() {
         const dateStr = getTodayDate();
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -2423,6 +2546,57 @@ class App {
 
         // Save
         XLSX.writeFile(wb, `BunButter_Backup_${timestamp}.xlsx`);
+    }
+
+    handleExcelImport(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            try {
+                const data = new Uint8Array(evt.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+                if (jsonData.length === 0) {
+                    alert('Excel file is empty or invalid format.');
+                    return;
+                }
+
+                // Map fields safely
+                const productsToImport = jsonData.map(row => ({
+                    name: row['Name'] || row['name'] || row['Product'] || row['product'],
+                    category: row['Category'] || row['category'],
+                    price: row['Price'] || row['price'] || row['Sales Price'] || row['SalesPrice'],
+                    salesPrice: row['Sales Price'] || row['SalesPrice'] || row['Price'],
+                    purchasePrice: row['Purchase Price'] || row['PurchasePrice'] || row['Cost'],
+                    stock: row['Stock'] || row['stock'] || row['Qty'] || row['Quantity'],
+                    unit: row['Unit'] || row['unit']
+                })).filter(p => p.name && (p.price || p.stock)); // Filter invalid rows
+
+                if (productsToImport.length === 0) {
+                    alert('No valid product data found. Check columns: Name, Price, Stock, Category.');
+                    return;
+                }
+
+                const result = this.store.importProducts(productsToImport);
+                alert(`Import Successful!\nAdded: ${result.added}\nUpdated: ${result.updated}`);
+
+                // Refresh Inventory if active
+                this.loadInventory();
+
+                // Reset input
+                e.target.value = '';
+
+            } catch (err) {
+                console.error('Import Error:', err);
+                alert('Failed to parse Excel file. Ensure it is a valid .xlsx or .xls file.');
+            }
+        };
+        reader.readAsArrayBuffer(file);
     }
 }
 
