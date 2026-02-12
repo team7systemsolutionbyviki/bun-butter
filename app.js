@@ -922,7 +922,12 @@ class App {
     logout() {
         // Confirm Backup
         if (confirm("Do you want to backup data to Excel before logging out?")) {
-            this.backupData();
+            try {
+                this.backupData();
+            } catch (e) {
+                console.error("Backup failed during logout:", e);
+                alert("Backup failed, but logging out anyway. Please check console for details.");
+            }
         }
 
         this.state.currentUser = null;
@@ -2485,6 +2490,10 @@ class App {
     }
 
     backupData() {
+        if (typeof XLSX === 'undefined') {
+            alert('Excel library (SheetJS) not loaded. Cannot backup.');
+            return;
+        }
         const dateStr = getTodayDate();
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
         const wb = XLSX.utils.book_new();
